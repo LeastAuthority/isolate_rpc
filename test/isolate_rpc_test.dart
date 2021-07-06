@@ -4,6 +4,19 @@ import 'package:isolate_rpc/isolate_rpc.dart';
 
 void main() {
   group('RPC Provider', () {
+    RpcProvider local;
+    RpcProvider remote;
+    dynamic transferLocalToRemote;
+    dynamic transferRemoteToLocal;
+    Error? errorLocal;
+    Error? errorRemote;
+
+    setUp(() {
+      local = RpcProvider((Message message, List<dynamic>? transfer) {
+
+      }, 50);
+    });
+
     group('signals', () {
       test('Signals are propogated', () {
 
