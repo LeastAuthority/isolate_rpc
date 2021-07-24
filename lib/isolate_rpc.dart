@@ -1,27 +1,30 @@
 library isolate_rpc;
-
-// import 'dart:html';
-
-typedef Future<U> RpcHandler<T, U> (T payload);
+import 'package:event/event.dart';
+import 'classes/Message.dart';
+import 'dart:core';
+import 'dart:async';
+import 'classes/Transaction.dart';
+typedef dynamic RpcHandler<T, U> (T payload);
 typedef T SignalHandler<T>(T payload);
 
-typedef Dispatcher =  Function(Message message, List<dynamic>? transfer);
+typedef Dispatcher (MessageClass message, List<dynamic>? transfer);
 
-enum MessageType {
-  signal,
-  rpc,
-  internal,
+abstract class TransactionType {
+    int? id;
+    var timeoutHandle;
+    void resolve(result);
+    void reject(error);
 }
 
-abstract class Message {
+class Message {
   MessageType? type;
   String? id;
-
   int? transactionId;
-
   dynamic payload;
 }
-
+const MSG_RESOLVE_TRANSACTION = "resolve_transaction",
+    MSG_REJECT_TRANSACTION = "reject_transaction",
+    MSG_ERROR = "error";
 
 abstract class RpcProviderInterface {
   void dispatch(dynamic message);
@@ -45,78 +48,184 @@ abstract class RpcProviderInterface {
 // Eventinterface<Error> error
 }
 
+class ValueEventArgs extends EventArgs {
+  String changedValue;
+  ValueEventArgs(this.changedValue);
+}
 class RpcProvider  {
   Dispatcher _dispatch;
-  int _rpcTimeout;
-  // ErrorEvent error = new ErrorEvent('');
+  int? _rpcTimeout;
+  int value = 0;
+
+  final error = Event();
 
   RpcProvider(dispatch, rpcTimeout)
       : _dispatch = dispatch,
         _rpcTimeout = rpcTimeout;
 
-        dispatch (Message payload) {
-          Message message = payload;
+      void _handleSignal(MessageClass message) {
+            if (this._signalHandlers[message.getId()] == null) {
+               return this._raiseError('invalid signal ${message.getId()}');
+            }
+             this._signalHandlers[message.getId()]?.forEach((handler) => handler(message.getPayload()));
+        }
 
-          switch (message.type) {
-          case MessageType.signal:
-          return this._handleSignal(message);
+        registerSignalHandler<T, U>(String id, SignalHandler handler) {
+          if (this._signalHandlers[id] == null) {
+             this._signalHandlers[id] = [];
+          }
+          this._signalHandlers[id]?.add(handler);
+          return this;
+        }
 
-          // case MessageType.rpc:
-          // return this._handeRpc(message);
-          //
-          // case MessageType.internal:
-          // return this._handleInternal(message);
-          //
-          // default:
-          // this._raiseError(`invalid message type ${message.type}`);
+        signal (String id, [payload, transfer]) {
+            MessageClass message = new MessageClass(id, payload, MessageType.signal, null);
+            this._dispatch(message, transfer != null ? transfer : null);
+            return this;
+        }
+
+        rpc<T, U>(String id, [T? payload, List<dynamic>? transfer]) {
+
+               var timer;
+                final future = Future(() {
+                  int transactionId = this._nextTransactionId;
+                  MessageClass message = new MessageClass(id, payload, MessageType.rpc, transactionId);
+                  this._dispatch(message, transfer != null ? transfer : null);
+                  Transaction transaction = new Transaction(transactionId);
+                  var transactionMap = this._pendingTransactions[transactionId] = transaction;
+
+                  if (_rpcTimeout! > 0) {
+                       timer = Timer(Duration(seconds:  _rpcTimeout!), () => this._transactionTimeout(transactionMap));
+                      this._pendingTransactions[transactionId]?.timeoutHandle = timer;
+                  }
+                });
+                return future;
+        }
+         unregisterSignalHandler (String id, SignalHandler handler) {
+          if (this._signalHandlers[id] !=null) {
+          this._signalHandlers[id] = this._signalHandlers[id]?.where((h) => handler != h).toList() as List<dynamic>;
+          }
+
+        return this;
+        }
+         registerRpcHandler(String id, RpcHandler handler) {
+            if (this._rpcHandlers[id] != null) {
+               Future.error("rpc handler for ${id} already registered");
+            }
+            this._rpcHandlers[id] = handler;
+            return this;
+        }
+
+          void _transactionTimeout(Transaction transaction)  {
+              //   transaction.reject('transaction timed out');
+              //
+              //   this._raiseError(`transaction ${transaction.id} timed out`);
+              //
+              // delete this._pendingTransactions[transaction.id];
+
+              return;
+        }
+
+        void _raiseError(String myError) {
+             // this.error.dispatch(new Error(error));
+              error.broadcast(ValueEventArgs(myError));
+              // this._dispatch({
+              //   type: RpcProvider.MessageType.internal,
+              //   id: MSG_ERROR,
+              //   payload: error
+              // });
+        }
+
+        void _handleRpc (MessageClass message) {
+            if (_rpcHandlers[message.getId()] == null) {
+              return this._raiseError("invalid rpc ${message.getId()}");
+            }
+          //   Future.value(_rpcHandlers[message.getId()]!(message.getPayload())).then((value){
+          //     MessageClass msg = new MessageClass(MSG_RESOLVE_TRANSACTION, value, MessageType.internal, message.getTransactionId());
+          //     this._dispatch(msg, null);
+          // }).catchError((error) {
+          //     MessageClass msg = new MessageClass(MSG_REJECT_TRANSACTION, error, MessageType.internal, message.getTransactionId());
+          //     this._dispatch(msg, null);
+          // });
+          Future(() {
+            if(_rpcHandlers[message.getId()]!(message.getPayload()) == MSG_RESOLVE_TRANSACTION) {
+                MessageClass msg = new MessageClass(MSG_RESOLVE_TRANSACTION, value, MessageType.internal, message.getTransactionId());
+                this._dispatch(msg, null);
+            } else if (_rpcHandlers[message.getId()]!(message.getPayload()) == MSG_REJECT_TRANSACTION) {
+                MessageClass msg = new MessageClass(MSG_REJECT_TRANSACTION, error, MessageType.internal, message.getTransactionId());
+                this._dispatch(msg, null);
+            }
+          });
+        }
+
+        _clearTransaction(Transaction transaction) {
+              if (Transaction != null) {
+                  // clearTimeout(transaction.timeoutHandle);
+              }
+
+              // remove this._pendingTransactions[transaction.getTransactionId()];
+          }
+        _handleInternal(MessageClass message) {
+
+          var transaction;
+          if(message.getTransactionId() != null) {
+            transaction = this._pendingTransactions[message.getTransactionId()];
+          } else {
+            transaction = null;
+          }
+          switch (message.getId()) {
+          case MSG_RESOLVE_TRANSACTION:
+          if (!transaction || message.getTransactionId() == 'undefined') {
+             return this._raiseError("no pending transaction with id ${message.getTransactionId()}");
+          }
+
+          transaction.resolve(message.payload);
+          // this._clearTransaction(this._pendingTransactions[message.getTransactionId()]);
+
+          break;
+
+          case MSG_REJECT_TRANSACTION:
+          // if (!transaction || message.getTransactionId() == 'undefined') {
+          // return this._raiseError("no pending transaction with id ${message.getTransactionId()}");
+          // }
+
+           //message.getPayload()
+         // this._pendingTransactions[message.getTransactionId()]?.reject('');
+          // this._clearTransaction(this._pendingTransactions[message.getTransactionId()]);
+
+          break;
+
+          case MSG_ERROR:
+          // this.error.dispatch(new Error("remote error: ${message.getPayload()}"));
+          break;
+
+          default:
+          this._raiseError("unhandled internal message ${message.id}");
+          break;
+          }
+        }
+
+          var _signalHandlers = new Map<String, List>();
+          var _rpcHandlers = new Map<String, RpcHandler>();
+          int _nextTransactionId = 0;
+          var _pendingTransactions = new Map<int, Transaction>();
+
+        dispatch (MessageClass payload) {
+            MessageClass message = payload;
+            switch (message.getMesageType()) {
+              case MessageType.signal:
+                return _handleSignal(message);
+              case MessageType.rpc:
+               return this._handleRpc(message);
+              case MessageType.internal:
+                return this._handleInternal(message);
+        //
+        // case MessageType.internal:
+        // return this._handleInternal(message);
+        //
+        // default:
+        // this._raiseError(`invalid message type ${message.type}`);
         }
       }
-      void _handleSignal(Message message) {
-            // if (!this._signalHandlers[message.id]) {
-            // return this._raiseError(`invalid signal ${message.id}`);
-            // }
-            //
-            // this._signalHandlers[message.id].forEach(handler => handler(message.payload));
-        }
-        registerSignalHandler<T, U>(String id, SignalHandler handler) {
-        // if (!this._signalHandlers[id]) {
-        // this._signalHandlers[id] = [];
-        // }
-        //
-        // this._signalHandlers[id].push(handler);
-        //
-        // return this;
-        }
-       void signal (String id, [payload, transfer]) {
-        // this._dispatch({
-        // type: RpcProvider.MessageType.signal,
-        // id,
-        // payload,
-        // }, transfer ? transfer : undefined);
-        //
-        // return this;
-        }
-        Future<U> rpc<T, U>(String id, [T? payload, List<dynamic>? transfer]) {
-            return Future.error('test future error!');
-
-        }
-        void unregisterSignalHandler (String id, SignalHandler handler) {
-          // if (this._signalHandlers[id]) {
-          // this._signalHandlers[id] = this._signalHandlers[id].filter(h => handler !== h);
-       // }
-
-        // return this;
-        }
-        void registerRpcHandler(String id, RpcHandler handler) {
-        // if (this._rpcHandlers[id]) {
-        // throw new Error(`rpc handler for ${id} already registered`);
-        // }
-        //
-        // this._rpcHandlers[id] = handler;
-        //
-        // return this;
-        }
-
-       var _signalHandlers = {};//    return
 //  }
 }
