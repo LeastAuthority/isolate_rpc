@@ -22,6 +22,7 @@ void main() {
          remote?.dispatch(message);
         }, 50);
 
+      //Warning: this line is finished, needs more work
       local?.error.subscribe((args) {print('local_event_fired');});
 
       remote = new RpcProvider((MessageClass message, List<dynamic>? transfer)  {
@@ -29,6 +30,7 @@ void main() {
         local?.dispatch(message);
         }, 50);
 
+      //Warning: this line is finished, needs more work
       remote?.error.subscribe((args) {print('remote_event_fired');});
       transferLocalToRemote = transferRemoteToLocal = null;
       errorRemote = errorLocal = null;

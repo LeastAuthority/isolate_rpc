@@ -49,8 +49,11 @@ abstract class RpcProviderInterface {
 }
 
 class ValueEventArgs extends EventArgs {
-  String changedValue;
-  ValueEventArgs(this.changedValue);
+  String error;
+  ValueEventArgs(this.error);
+  String get() {
+    return error;
+  }
 }
 class RpcProvider  {
   Dispatcher _dispatch;
@@ -67,6 +70,7 @@ class RpcProvider  {
             if (this._signalHandlers[message.getId()] == null) {
                return this._raiseError('invalid signal ${message.getId()}');
             }
+
              this._signalHandlers[message.getId()]?.forEach((handler) => handler(message.getPayload()));
         }
 
@@ -85,7 +89,6 @@ class RpcProvider  {
         }
 
         rpc<T, U>(String id, [T? payload, List<dynamic>? transfer]) {
-
                var timer;
                 final future = Future(() {
                   int transactionId = this._nextTransactionId;
@@ -102,11 +105,10 @@ class RpcProvider  {
                 return future;
         }
          unregisterSignalHandler (String id, SignalHandler handler) {
-          if (this._signalHandlers[id] !=null) {
-          this._signalHandlers[id] = this._signalHandlers[id]?.where((h) => handler != h).toList() as List<dynamic>;
+          if (this._signalHandlers[id] != null) {
+             this._signalHandlers.remove(id);
           }
-
-        return this;
+         return this;
         }
          registerRpcHandler(String id, RpcHandler handler) {
             if (this._rpcHandlers[id] != null) {
@@ -127,8 +129,11 @@ class RpcProvider  {
         }
 
         void _raiseError(String myError) {
+              //Warning this function is not finished, still needs a lot of work.
+
              // this.error.dispatch(new Error(error));
-              error.broadcast(ValueEventArgs(myError));
+              ValueEventArgs errorMessage = new ValueEventArgs(myError);
+              error.broadcast(errorMessage);
               // this._dispatch({
               //   type: RpcProvider.MessageType.internal,
               //   id: MSG_ERROR,
