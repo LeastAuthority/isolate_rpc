@@ -16,9 +16,9 @@ abstract class AbMessage {
   MessageType _messageType;
   String _id;
   int? _transactionId;
-  dynamic _payload;
+  int? _payload;
 
-  MessageClass(String id, dynamic payload, MessageType messageType, int? transactionId)
+  MessageClass(String id, int? payload, MessageType messageType, int? transactionId)
       : _id = id,
         _payload = payload,
         _messageType = messageType,

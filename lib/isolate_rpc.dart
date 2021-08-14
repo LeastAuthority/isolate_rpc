@@ -1,5 +1,6 @@
 library isolate_rpc;
 import 'package:event/event.dart';
+import 'package:isolate_rpc/utils/AsyncOperation.dart';
 import 'classes/Message.dart';
 import 'dart:core';
 import 'dart:async';
@@ -88,20 +89,21 @@ class RpcProvider  {
             return this;
         }
 
-        rpc<T, U>(String id, [T? payload, List<dynamic>? transfer]) {
+        rpc<T, U>(String id, [int? payload, List<dynamic>? transfer]) {
+               AsyncOperation asyncOperation = new AsyncOperation();
+               final future = asyncOperation.doOperation();
                var timer;
-                final future = Future(() {
-                  int transactionId = this._nextTransactionId;
-                  MessageClass message = new MessageClass(id, payload, MessageType.rpc, transactionId);
-                  this._dispatch(message, transfer != null ? transfer : null);
-                  Transaction transaction = new Transaction(transactionId);
-                  var transactionMap = this._pendingTransactions[transactionId] = transaction;
+               int transactionId = this._nextTransactionId;
+               MessageClass message = new MessageClass(id, payload, MessageType.rpc, transactionId);
+               this._dispatch(message, transfer != null ? transfer : null);
+               Transaction transaction = new Transaction(transactionId, asyncOperation);
+               var transactionMap = this._pendingTransactions[transactionId] = transaction;
 
-                  if (_rpcTimeout! > 0) {
-                       timer = Timer(Duration(seconds:  _rpcTimeout!), () => this._transactionTimeout(transactionMap));
-                      this._pendingTransactions[transactionId]?.timeoutHandle = timer;
-                  }
-                });
+               if (_rpcTimeout! > 0) {
+                 timer = Timer(Duration(seconds:  _rpcTimeout!), () => this._transactionTimeout(transactionMap));
+                 this._pendingTransactions[transactionId]?.timeoutHandle = timer;
+               }
+
                 return future;
         }
          unregisterSignalHandler (String id, SignalHandler handler) {
@@ -142,24 +144,15 @@ class RpcProvider  {
         }
 
         void _handleRpc (MessageClass message) {
-            if (_rpcHandlers[message.getId()] == null) {
+          if (_rpcHandlers[message.getId()] == null) {
               return this._raiseError("invalid rpc ${message.getId()}");
             }
-          //   Future.value(_rpcHandlers[message.getId()]!(message.getPayload())).then((value){
-          //     MessageClass msg = new MessageClass(MSG_RESOLVE_TRANSACTION, value, MessageType.internal, message.getTransactionId());
-          //     this._dispatch(msg, null);
-          // }).catchError((error) {
-          //     MessageClass msg = new MessageClass(MSG_REJECT_TRANSACTION, error, MessageType.internal, message.getTransactionId());
-          //     this._dispatch(msg, null);
-          // });
-          Future(() {
-            if(_rpcHandlers[message.getId()]!(message.getPayload()) == MSG_RESOLVE_TRANSACTION) {
-                MessageClass msg = new MessageClass(MSG_RESOLVE_TRANSACTION, value, MessageType.internal, message.getTransactionId());
-                this._dispatch(msg, null);
-            } else if (_rpcHandlers[message.getId()]!(message.getPayload()) == MSG_REJECT_TRANSACTION) {
-                MessageClass msg = new MessageClass(MSG_REJECT_TRANSACTION, error, MessageType.internal, message.getTransactionId());
-                this._dispatch(msg, null);
-            }
+            Future.value(_rpcHandlers[message.getId()]!(message.getPayload())).then((value){
+              MessageClass msg = new MessageClass(MSG_RESOLVE_TRANSACTION, value as int, MessageType.internal, message.getTransactionId());
+              this._dispatch(msg, null);
+          }).catchError((error) {
+              // MessageClass msg = new MessageClass(MSG_REJECT_TRANSACTION, 0, MessageType.internal, message.getTransactionId());
+              // this._dispatch(msg, null);
           });
         }
 
@@ -171,29 +164,28 @@ class RpcProvider  {
               // remove this._pendingTransactions[transaction.getTransactionId()];
           }
         _handleInternal(MessageClass message) {
-
           var transaction;
           if(message.getTransactionId() != null) {
             transaction = this._pendingTransactions[message.getTransactionId()];
           } else {
             transaction = null;
           }
+
           switch (message.getId()) {
           case MSG_RESOLVE_TRANSACTION:
-          if (!transaction || message.getTransactionId() == 'undefined') {
-             return this._raiseError("no pending transaction with id ${message.getTransactionId()}");
+          if (transaction == null || message.getTransactionId() == 'undefined') {
+            return this._raiseError("no pending transaction with id ${message.getTransactionId()}");
           }
 
-          transaction.resolve(message.payload);
+          transaction.resolve(message.getPayload());
           // this._clearTransaction(this._pendingTransactions[message.getTransactionId()]);
-
           break;
 
           case MSG_REJECT_TRANSACTION:
-          // if (!transaction || message.getTransactionId() == 'undefined') {
+          // if (transaction == null || message.getTransactionId() == 'undefined') {
           // return this._raiseError("no pending transaction with id ${message.getTransactionId()}");
           // }
-
+            transaction.resolve(10);
            //message.getPayload()
          // this._pendingTransactions[message.getTransactionId()]?.reject('');
           // this._clearTransaction(this._pendingTransactions[message.getTransactionId()]);
@@ -216,7 +208,10 @@ class RpcProvider  {
           var _pendingTransactions = new Map<int, Transaction>();
 
         dispatch (MessageClass payload) {
-            MessageClass message = payload;
+          print('Prrrrr');
+          print(payload.getMesageType());
+
+          MessageClass message = payload;
             switch (message.getMesageType()) {
               case MessageType.signal:
                 return _handleSignal(message);

@@ -1,19 +1,25 @@
 import 'dart:async';
 
+import 'package:isolate_rpc/utils/AsyncOperation.dart';
+
 abstract class AbTransaction {
   int? _transactionId;
 }
 
  class Transaction extends AbTransaction{
-  // Function _resolve;
+   AsyncOperation? _asyncOperation;
   int? _transactionId;
   Timer? timeoutHandle;
-  Transaction(int? transactionId)
-      :_transactionId = transactionId;
+  Transaction(int? transactionId, AsyncOperation? asyncOperation) {
+    this._asyncOperation = asyncOperation;
+    _transactionId = transactionId;
+  }
 
-  // dynamic resolve() {
-  //   return _resolve;
-  // }
+  void resolve(int payload) {
+
+    _asyncOperation!.finishOperation(payload);
+   // return _resolve!();
+  }
   // dynamic reject() {
   //   return _resolve;
   // }
