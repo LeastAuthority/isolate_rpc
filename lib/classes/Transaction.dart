@@ -20,9 +20,9 @@ abstract class AbTransaction {
     _asyncOperation!.finishOperation(payload);
    // return _resolve!();
   }
-  // dynamic reject() {
-  //   return _resolve;
-  // }
+   void reject(error) {
+     _asyncOperation!.errorHappened(error);
+  }
   dynamic getTransactionId() {
     return _transactionId;
   }

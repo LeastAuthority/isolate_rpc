@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:isolate_rpc/classes/Message.dart';
 
 import 'package:isolate_rpc/isolate_rpc.dart';
+import 'package:isolate_rpc/utils/AsyncOperation.dart';
+import 'package:isolate_rpc/utils/AsyncOperationWithTimer.dart';
+import 'package:isolate_rpc/utils/compareArrays.dart';
 typedef T SignalHandler<T>(T payload);
 typedef Future<U> RpcHandler<T, U> (T payload);
 
@@ -13,8 +16,8 @@ void main() {
     dynamic transferLocalToRemote;
     dynamic transferRemoteToLocal;
     Message localMessage;
-    Error? errorLocal;
-    Error? errorRemote;
+    String? errorLocal;
+    String? errorRemote;
 
     setUp(() {
       local = new RpcProvider((MessageClass message, List<dynamic>? transfer) {
@@ -22,16 +25,22 @@ void main() {
          remote?.dispatch(message);
         }, 50);
 
-      //Warning: this line is finished, needs more work
-      local?.error.subscribe((args) {print('local_event_fired');});
-
+      // local?.error.subscribe((args) {print('local_event_fired');});
+      RpcProvider.error.subscribe((args) {
+        errorLocal = (args as ValueEventArgs).get();
+        print('local_event_fired');
+        print(errorLocal);
+      });
       remote = new RpcProvider((MessageClass message, List<dynamic>? transfer)  {
         transferRemoteToLocal = transfer;
         local?.dispatch(message);
         }, 50);
 
-      //Warning: this line is finished, needs more work
-      remote?.error.subscribe((args) {print('remote_event_fired');});
+      RpcProvider.error.subscribe((args) {
+        errorRemote = (args as ValueEventArgs).get();
+        print('remote_event_fired');
+        print(errorRemote);
+      });
       transferLocalToRemote = transferRemoteToLocal = null;
       errorRemote = errorLocal = null;
     });
@@ -48,9 +57,8 @@ void main() {
 
       test('Unregistered signals raise an error', () {
         local?.signal('action', 10);
-
-        assert(errorLocal == null);
-        assert(errorRemote == null);
+        assert(errorLocal != null);
+        assert(errorRemote != null);
       });
 
       test('Multiple signals do not interfere', () {
@@ -96,62 +104,67 @@ void main() {
         const transfer = [1, 2, 3];
 
         remote?.registerSignalHandler('action', (value) => x = value);
-
         local?.signal('action', 2, transfer);
 
         assert(errorLocal == null);
         assert(errorRemote == null);
         assert(x==2);
-        assert(transferLocalToRemote == transfer);
-         assert(transferRemoteToLocal == null);
+        assert(compareArrays(transferLocalToRemote, transfer));
+        assert(transferRemoteToLocal == null);
       });
     });
 
     group('RPC', () {
       test('RPC handlers can return values', () async {
-        remote?.registerRpcHandler('action', (x) => 10); //the original code () => 10. Changed to make linter shut up.
+        remote?.registerRpcHandler('action', (x) => 10);
         int result = await local?.rpc('action');
         assert(result==10);
-        // assert(errorLocal == null);
-        // assert(errorRemote == null);
+        assert(errorLocal == null);
+        assert(errorRemote == null);
       });
 
       test('RPC handlers can return futures', () async {
-        // remote?.registerRpcHandler('action', (x) {
-        //   return Future.delayed(Duration(seconds: 5), (){
-        //       print('registerRpcHandlerddddd');
-        //     });
-        // });
-        // int result = await local?.rpc('action');
-        //  assert(result==10);
-        // assert(errorLocal == null);
-        // assert(errorRemote == null);
+        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 15);
+        remote?.registerRpcHandler('action', (x) {
+          return asyncOperation.doOperation(()=> asyncOperation.finishOperation(10));
+        });
+        int result = await local?.rpc('action');
+        assert(result==10);
+        assert(errorLocal == null);
+        assert(errorRemote == null);
       });
 
       // TODO: check terminology (originally "promise rejection")
       test('Future rejection is transferred', () async {
-        //   remote?.registerRpcHandler('action', (x) {
-        //       // return Future.delayed(Duration(seconds: 5), () {
-        //       //  throw(10);
-        //     // });
-        //     return MSG_REJECT_TRANSACTION;
-        //   });
-        //
-        // // try {
-        //   local?.rpc('action')
-        //       .then(expectAsync((e) {
+        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 15);
+        remote?.registerRpcHandler('action', (x) {
+          return asyncOperation.doOperation(()=> asyncOperation.errorHappened(10));
+        });
+
+        // local?.rpc('action')
+        //       .then((e) {
+        //     print('eeeeeerpc');
         //     print(e);
-        //   })).catchError((error){
+        //   }).catchError((error){
         //     print("eeee");
         //     print(error);
-        //     assert(error==10);
+        //     assert(error==11);
         //     assert(errorLocal == null);
         //     assert(errorRemote  == null);
         //   });
 
       });
 
-      test('Invalid RPC calls are rejected', () {
+      test('Invalid RPC calls are rejected', () async {
+
+        // try {
+        //   int result = await local?.rpc('action');
+        //   if(errorLocal == null)  throw('Error');
+        //   throw('Should have been rejected');
+        // } catch (e) {
+        //     print('rrrr');
+        // }
+
         // local?.rpc('action').then((result){
         //
         // }).catchError((e) {
