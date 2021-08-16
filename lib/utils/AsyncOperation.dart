@@ -17,4 +17,7 @@ class AsyncOperation {
   void errorHappened(error) {
     _completer.completeError(error);
   }
+  bool isCompleted () {
+    return _completer.isCompleted;
+  }
 }

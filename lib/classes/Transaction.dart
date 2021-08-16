@@ -26,5 +26,7 @@ abstract class AbTransaction {
   dynamic getTransactionId() {
     return _transactionId;
   }
-
+  bool isCompleted () {
+    return _asyncOperation!.isCompleted();
+  }
 }

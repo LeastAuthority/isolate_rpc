@@ -119,18 +119,18 @@ class RpcProvider  {
         }
 
         void _transactionTimeout(Transaction transaction)  {
-                transaction.reject('transaction timed out');
+
+             if(transaction.isCompleted() == false) {
+               transaction.reject('transaction timed out');
+             }
 
                 this._raiseError("transaction ${transaction.getTransactionId()} timed out");
-
-              // delete this._pendingTransactions[transaction.getTransactionId()];
+                this._pendingTransactions.remove(transaction.getTransactionId());
 
               return;
         }
 
         void _raiseError(String myError) {
-          print('myError');
-          print(myError);
               //Warning this function is not finished, still needs a lot of work.
              // this.error.dispatch(new Error(error));
               ValueEventArgs errorMessage = new ValueEventArgs(myError);
@@ -147,17 +147,16 @@ class RpcProvider  {
               MessageClass msg = new MessageClass(MSG_RESOLVE_TRANSACTION, value as int, MessageType.internal, message.getTransactionId());
               this._dispatch(msg, null);
           }).catchError((error) {
-              MessageClass msg = new MessageClass(MSG_REJECT_TRANSACTION, 0, MessageType.internal, message.getTransactionId());
+              MessageClass msg = new MessageClass(MSG_REJECT_TRANSACTION, error, MessageType.internal, message.getTransactionId());
               this._dispatch(msg, null);
           });
         }
 
         _clearTransaction(Transaction? transaction) {
-              // if (Transaction != null) {
-              //     // clearTimeout(transaction.timeoutHandle);
-              // }
-
-               this._pendingTransactions.remove(transaction?.getTransactionId());
+          if (transaction != null) {
+            transaction.timeoutHandle = null;
+          }
+          this._pendingTransactions.remove(transaction?.getTransactionId());
         }
         _handleInternal(MessageClass message) {
           var transaction;
@@ -181,7 +180,7 @@ class RpcProvider  {
           // if (transaction == null || message.getTransactionId() == 'undefined') {
           // return this._raiseError("no pending transaction with id ${message.getTransactionId()}");
           // }
-            transaction.resolve(10);
+            transaction.reject(message.getPayload());
            //message.getPayload()
          // this._pendingTransactions[message.getTransactionId()]?.reject('');
           // this._clearTransaction(this._pendingTransactions[message.getTransactionId()]);

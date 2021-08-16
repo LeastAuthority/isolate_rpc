@@ -23,7 +23,7 @@ void main() {
       local = new RpcProvider((MessageClass message, List<dynamic>? transfer) {
          transferLocalToRemote = transfer;
          remote?.dispatch(message);
-        }, 50);
+        }, 29);
 
       // local?.error.subscribe((args) {print('local_event_fired');});
       RpcProvider.error.subscribe((args) {
@@ -34,7 +34,7 @@ void main() {
       remote = new RpcProvider((MessageClass message, List<dynamic>? transfer)  {
         transferRemoteToLocal = transfer;
         local?.dispatch(message);
-        }, 50);
+        }, 29);
 
       RpcProvider.error.subscribe((args) {
         errorRemote = (args as ValueEventArgs).get();
@@ -124,7 +124,7 @@ void main() {
       });
 
       test('RPC handlers can return futures', () async {
-        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 15);
+        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 10);
         remote?.registerRpcHandler('action', (x) {
           return asyncOperation.doOperation(()=> asyncOperation.finishOperation(10));
         });
@@ -136,63 +136,71 @@ void main() {
 
       // TODO: check terminology (originally "promise rejection")
       test('Future rejection is transferred', () async {
-        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 15);
+        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 10);
         remote?.registerRpcHandler('action', (x) {
           return asyncOperation.doOperation(()=> asyncOperation.errorHappened(10));
         });
 
-        // local?.rpc('action')
-        //       .then((e) {
-        //     print('eeeeeerpc');
-        //     print(e);
-        //   }).catchError((error){
-        //     print("eeee");
-        //     print(error);
-        //     assert(error==11);
-        //     assert(errorLocal == null);
-        //     assert(errorRemote  == null);
-        //   });
+        try {
+           await local?.rpc('action');
+           throw('should have been rejected');
+        } catch (e) {
+          assert(e==10);
+          assert(errorLocal == null);
+          assert(errorRemote  == null);
+        }
 
       });
 
       test('Invalid RPC calls are rejected', () async {
 
-        // try {
-        //   int result = await local?.rpc('action');
-        //   if(errorLocal == null)  throw('Error');
-        //   throw('Should have been rejected');
-        // } catch (e) {
-        //     print('rrrr');
-        // }
+        try {
+          await local?.rpc('action');
+          throw('should have been rejected');
+        } catch (e) {
 
-        // local?.rpc('action').then((result){
-        //
-        // }).catchError((e) {
-        //   Future.error('should have been rejected');
-        // });
+        }
 
       });
 
       test('Invalid RPC calls throw on both ends', ()async {
 
-        // local?.rpc('action').then((result){
-        //
-        // }).catchError((e) {
-        //   Future.error('should have been rejected');
-        // });
-        //
-        // assert(errorLocal == null);
-        // assert(errorRemote == null);
+        try {
+          await local?.rpc('action');
+          throw('should have been rejected');
+        } catch (e) {
+           assert(errorLocal != null);
+           assert(errorRemote != null);
+        }
+
 
       });
 
-      test('RPC calls time out', () {
-        // remote?.registerRpcHandler('action', (x) {
-        //   return Future.delayed(Duration(seconds: 100), (){
+      test('RPC calls time out', ()async {
+        // AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 100);
+        // //AsyncOperationWithTimer asyncOperation2 = new AsyncOperationWithTimer(timer: 100);
         //
-        //   });
+        // remote?.registerRpcHandler('action', (x) {
+        //   return asyncOperation.doOperation(()=> asyncOperation.errorHappened(10));
+        // });
+        //
+        // local?.rpc('action').then(()=> {
+        //   throw('should have been rejected')
+        // }
+        // // ,onError:(e)=> asyncOperation2.doOperation(()=> asyncOperation.finishOperation(10))
+        // )
+        // .then((e)=> {
+        //     print(e)
         // });
 
+        // try {
+        //   await local?.rpc('action');
+        //
+        // } catch (e) {
+        // // assert(e==10);
+        // assert(errorLocal == null);
+        // // assert(errorRemote  == null);
+        // }
       });
 
       test('Multiple RPC handlers do not interfere', () {

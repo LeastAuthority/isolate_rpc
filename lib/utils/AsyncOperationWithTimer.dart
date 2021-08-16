@@ -18,6 +18,6 @@ class AsyncOperationWithTimer {
 
   // If something goes wrong, call this.
   void errorHappened(error) {
-    _completer.complete(11);
+    _completer.completeError(error);
   }
 }
