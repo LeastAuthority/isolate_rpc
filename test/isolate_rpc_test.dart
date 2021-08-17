@@ -23,23 +23,19 @@ void main() {
       local = new RpcProvider((MessageClass message, List<dynamic>? transfer) {
          transferLocalToRemote = transfer;
          remote?.dispatch(message);
-        }, 29);
+        }, 50);
 
       // local?.error.subscribe((args) {print('local_event_fired');});
       RpcProvider.error.subscribe((args) {
         errorLocal = (args as ValueEventArgs).get();
-        print('local_event_fired');
-        print(errorLocal);
       });
       remote = new RpcProvider((MessageClass message, List<dynamic>? transfer)  {
         transferRemoteToLocal = transfer;
         local?.dispatch(message);
-        }, 29);
+        }, 50);
 
       RpcProvider.error.subscribe((args) {
         errorRemote = (args as ValueEventArgs).get();
-        print('remote_event_fired');
-        print(errorRemote);
       });
       transferLocalToRemote = transferRemoteToLocal = null;
       errorRemote = errorLocal = null;
@@ -124,7 +120,7 @@ void main() {
       });
 
       test('RPC handlers can return futures', () async {
-        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 10);
+        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 15);
         remote?.registerRpcHandler('action', (x) {
           return asyncOperation.doOperation(()=> asyncOperation.finishOperation(10));
         });
@@ -136,14 +132,14 @@ void main() {
 
       // TODO: check terminology (originally "promise rejection")
       test('Future rejection is transferred', () async {
-        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 10);
+        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 15);
         remote?.registerRpcHandler('action', (x) {
           return asyncOperation.doOperation(()=> asyncOperation.errorHappened(10));
         });
 
         try {
            await local?.rpc('action');
-           throw('should have been rejected');
+           Future.error('should have been rejected');
         } catch (e) {
           assert(e==10);
           assert(errorLocal == null);
@@ -156,7 +152,7 @@ void main() {
 
         try {
           await local?.rpc('action');
-          throw('should have been rejected');
+          Future.error('should have been rejected');
         } catch (e) {
 
         }
@@ -164,56 +160,74 @@ void main() {
       });
 
       test('Invalid RPC calls throw on both ends', ()async {
-
         try {
           await local?.rpc('action');
-          throw('should have been rejected');
+          Future.error('should have been rejected');
         } catch (e) {
            assert(errorLocal != null);
            assert(errorRemote != null);
         }
-
-
       });
 
       test('RPC calls time out', ()async {
-        // AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 100);
-        // //AsyncOperationWithTimer asyncOperation2 = new AsyncOperationWithTimer(timer: 100);
-        //
-        // remote?.registerRpcHandler('action', (x) {
-        //   return asyncOperation.doOperation(()=> asyncOperation.errorHappened(10));
-        // });
-        //
-        // local?.rpc('action').then(()=> {
-        //   throw('should have been rejected')
-        // }
-        // // ,onError:(e)=> asyncOperation2.doOperation(()=> asyncOperation.finishOperation(10))
-        // )
-        // .then((e)=> {
-        //     print(e)
-        // });
+        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 100);
+        AsyncOperationWithTimer asyncOperation2 = new AsyncOperationWithTimer(timer: 100);
 
-        // try {
-        //   await local?.rpc('action');
-        //
-        // } catch (e) {
-        // // assert(e==10);
-        // assert(errorLocal == null);
-        // // assert(errorRemote  == null);
-        // }
-      });
+        remote?.registerRpcHandler('action', (x) {
+          return asyncOperation.doOperation(()=> asyncOperation.finishOperation(10));
+        });
 
-      test('Multiple RPC handlers do not interfere', () {
+        try {
+          await local?.rpc('action');
+          Future.error('should have been rejected');
+        } catch (e) {
+            assert(errorLocal != null);
+            await asyncOperation2.doOperation(()=> asyncOperation2.finishOperation(0));
+            assert(errorRemote  != null);
+        }
 
       });
 
-      // TODO: "deregister" is the original name but I think "unregister" is more conventional.
-      test('RPC handler can be deregistered', () {
+      test('Multiple RPC handlers do not interfere', ()async {
+        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 30);
+        remote?.registerRpcHandler('a1', (value) {
+          return asyncOperation.doOperation(()=> asyncOperation.finishOperation(value));
+        });
+        remote?.registerRpcHandler('a2', (value) => 2 * 20);
 
+        int a1 = await local?.rpc('a1',10);
+        int a2 = await local?.rpc('a2',20);
+
+        assert(a1 == 10);
+        assert(a2 == 40);
+        assert(errorLocal == null);
+        assert(errorRemote == null);
       });
 
-      test('Transfer is honored', () {
+      test('RPC handler can be unregister', ()async {
+        var handler = (x) => 10;
+        remote?.registerRpcHandler('action', handler);
+        remote?.unRegisterRpcHandler('action', handler);
 
+          try {
+            await local?.rpc('action');
+            Future.error('should have been rejected');
+          } catch (e) {
+            assert(errorLocal != null);
+            assert(errorRemote  != null);
+          }
+      });
+
+      test('Transfer is honored', ()async {
+        const transfer = [1, 2, 3];
+
+        remote?.registerRpcHandler('action', (x) => 10);
+
+        int x = await local?.rpc('action', null, transfer);
+        assert(compareArrays(transferLocalToRemote, transfer));
+        assert(x  == 10);
+        assert(errorLocal == null);
+        assert(errorRemote == null);
       });
     });
   });

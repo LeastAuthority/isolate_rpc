@@ -46,7 +46,6 @@ abstract class RpcProviderInterface {
 
   RpcProviderInterface deregisterSignalHandler<T>(
       {String id, SignalHandler<T> handler});
-// Eventinterface<Error> error
 }
 
 class ValueEventArgs extends EventArgs {
@@ -67,13 +66,31 @@ class RpcProvider  {
       : _dispatch = dispatch,
         _rpcTimeout = rpcTimeout;
 
+        var _signalHandlers = new Map<String, List>();
+        var _rpcHandlers = new Map<String, RpcHandler>();
+        int _nextTransactionId = 0;
+        var _pendingTransactions = new Map<int, Transaction>();
+
+        dispatch (MessageClass payload) {
+          MessageClass message = payload;
+          switch (message.getMesageType()) {
+            case MessageType.signal:
+              return _handleSignal(message);
+            case MessageType.rpc:
+              return this._handleRpc(message);
+            case MessageType.internal:
+              return this._handleInternal(message);
+          // default:
+          //   this._raiseError(`invalid message type ${message.type}`);
+          }
+        }
+
         void _handleSignal(MessageClass message) {
             if (this._signalHandlers[message.getId()] == null) {
                return this._raiseError('invalid signal ${message.getId()}');
             }
             this._signalHandlers[message.getId()]?.forEach((handler) => handler(message.getPayload()));
         }
-
 
         signal (String id, [payload, transfer]) {
           MessageClass message = new MessageClass(id, payload, MessageType.signal, null);
@@ -91,11 +108,12 @@ class RpcProvider  {
                Transaction transaction = new Transaction(transactionId, asyncOperation);
                this._pendingTransactions[transactionId] = transaction;
                if (_rpcTimeout! > 0) {
-                 timer = Timer(Duration(seconds:  _rpcTimeout!), () => this._transactionTimeout(transaction));
+                 timer = Timer(Duration(milliseconds:  _rpcTimeout!), () => this._transactionTimeout(transaction));
                  this._pendingTransactions[transactionId]?.timeoutHandle = timer;
                }
                return future;
         }
+
         registerSignalHandler<T, U>(String id, SignalHandler handler) {
           if (this._signalHandlers[id] == null) {
             this._signalHandlers[id] = [];
@@ -118,6 +136,13 @@ class RpcProvider  {
             return this;
         }
 
+        unRegisterRpcHandler (String id, RpcHandler handler)  {
+          if (this._rpcHandlers[id] != null) {
+             this._rpcHandlers.remove(id);
+            }
+            return this;
+        }
+
         void _transactionTimeout(Transaction transaction)  {
 
              if(transaction.isCompleted() == false) {
@@ -131,8 +156,6 @@ class RpcProvider  {
         }
 
         void _raiseError(String myError) {
-              //Warning this function is not finished, still needs a lot of work.
-             // this.error.dispatch(new Error(error));
               ValueEventArgs errorMessage = new ValueEventArgs(myError);
               MessageClass msg = new MessageClass(MSG_ERROR, 0, MessageType.internal, 0);
               error.broadcast(errorMessage);
@@ -158,6 +181,7 @@ class RpcProvider  {
           }
           this._pendingTransactions.remove(transaction?.getTransactionId());
         }
+
         _handleInternal(MessageClass message) {
           var transaction;
           if(message.getTransactionId() != null) {
@@ -198,27 +222,5 @@ class RpcProvider  {
           }
         }
 
-          var _signalHandlers = new Map<String, List>();
-          var _rpcHandlers = new Map<String, RpcHandler>();
-          int _nextTransactionId = 0;
-          var _pendingTransactions = new Map<int, Transaction>();
-
-        dispatch (MessageClass payload) {
-          MessageClass message = payload;
-            switch (message.getMesageType()) {
-              case MessageType.signal:
-                return _handleSignal(message);
-              case MessageType.rpc:
-               return this._handleRpc(message);
-              case MessageType.internal:
-                return this._handleInternal(message);
-        //
-        // case MessageType.internal:
-        // return this._handleInternal(message);
-        //
-        // default:
-        // this._raiseError(`invalid message type ${message.type}`);
-        }
-      }
 //  }
 }

@@ -7,7 +7,7 @@ class AsyncOperationWithTimer {
     this.timer = timer;
   }
   Future doOperation(Function callback) {
-    Future.delayed(Duration(seconds: timer), () => callback());
+    Future.delayed(Duration(milliseconds: timer), () => callback());
     return _completer.future; // Send future object back to client.
   }
 
