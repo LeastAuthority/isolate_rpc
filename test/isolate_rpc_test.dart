@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isolate_rpc/classes/Message.dart';
+import 'package:isolate_rpc/classes/ValueEventArgs.dart';
 
 import 'package:isolate_rpc/isolate_rpc.dart';
 import 'package:isolate_rpc/utils/AsyncOperation.dart';

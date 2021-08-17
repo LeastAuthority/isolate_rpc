@@ -6,6 +6,13 @@ abstract class AbTransaction {
   int? _transactionId;
 }
 
+abstract class TransactionType {
+  int? id;
+  var timeoutHandle;
+  void resolve(result);
+  void reject(error);
+}
+
  class Transaction extends AbTransaction{
    AsyncOperation? _asyncOperation;
   int? _transactionId;
