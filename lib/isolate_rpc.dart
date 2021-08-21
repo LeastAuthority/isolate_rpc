@@ -96,11 +96,13 @@ class RpcProvider  {
         unRegisterRpcHandler (String id, RpcHandler handler)  {
           if (this._rpcHandlers[id] != null) {
              this._rpcHandlers.remove(id);
-            }
+          }
             return this;
         }
 
         _transactionTimeout(Transaction transaction)  {
+          //In dart, we gonna get an error if we reject a future that is already completed
+          //This condition is to prevent the error from happening.
           if(transaction.isCompleted() == false) {
             transaction.reject('$TRANSACTION_TIME_OUT');
           }

@@ -4,7 +4,6 @@ import 'package:isolate_rpc/classes/Message.dart';
 import 'package:isolate_rpc/classes/ValueEventArgs.dart';
 
 import 'package:isolate_rpc/isolate_rpc.dart';
-import 'package:isolate_rpc/utils/AsyncOperation.dart';
 import 'package:isolate_rpc/utils/AsyncOperationWithTimer.dart';
 import 'package:isolate_rpc/utils/compareArrays.dart';
 typedef T SignalHandler<T>(T payload);
@@ -121,9 +120,9 @@ void main() {
       });
 
       test('RPC handlers can return futures', () async {
-        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 15);
+        AsyncOperationWithTimer timer = new AsyncOperationWithTimer(timer: 15);
         remote?.registerRpcHandler('action', (x) {
-          return asyncOperation.doOperation(()=> asyncOperation.finishOperation(10));
+          return timer.doOperation(()=> timer.finishOperation(10));
         });
         int result = await local?.rpc('action');
         assert(result==10);
@@ -133,9 +132,9 @@ void main() {
 
       // TODO: check terminology (originally "promise rejection")
       test('Future rejection is transferred', () async {
-        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 15);
+        AsyncOperationWithTimer timer = new AsyncOperationWithTimer(timer: 15);
         remote?.registerRpcHandler('action', (x) {
-          return asyncOperation.doOperation(()=> asyncOperation.errorHappened(10));
+          return timer.doOperation(()=> timer.errorHappened(10));
         });
 
         try {
@@ -171,11 +170,11 @@ void main() {
       });
 
       test('RPC calls time out', ()async {
-        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 100);
-        AsyncOperationWithTimer asyncOperation2 = new AsyncOperationWithTimer(timer: 100);
+        AsyncOperationWithTimer firstTimer = new AsyncOperationWithTimer(timer: 100);
+        AsyncOperationWithTimer secondTimer = new AsyncOperationWithTimer(timer: 100);
 
         remote?.registerRpcHandler('action', (x) {
-          return asyncOperation.doOperation(()=> asyncOperation.finishOperation(10));
+          return firstTimer.doOperation(()=> firstTimer.finishOperation(10));
         });
 
         try {
@@ -183,16 +182,16 @@ void main() {
           Future.error('should have been rejected');
         } catch (e) {
             assert(errorLocal != null);
-            await asyncOperation2.doOperation(()=> asyncOperation2.finishOperation(0));
+            await secondTimer.doOperation(()=> secondTimer.finishOperation(0));
             assert(errorRemote  != null);
         }
 
       });
 
       test('Multiple RPC handlers do not interfere', ()async {
-        AsyncOperationWithTimer asyncOperation = new AsyncOperationWithTimer(timer: 30);
+        AsyncOperationWithTimer timer = new AsyncOperationWithTimer(timer: 30);
         remote?.registerRpcHandler('a1', (value) {
-          return asyncOperation.doOperation(()=> asyncOperation.finishOperation(value));
+          return timer.doOperation(()=> timer.finishOperation(value));
         });
         remote?.registerRpcHandler('a2', (value) => 2 * 20);
 
