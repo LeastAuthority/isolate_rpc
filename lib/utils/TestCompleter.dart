@@ -1,9 +1,13 @@
 import 'dart:async';
 
-class AsyncOperation {
+class TestCompleter {
   final Completer _completer = new Completer();
-
-  Future doOperation() {
+  int timer = 0;
+  TestCompleter({int timer = 0}) {
+    this.timer = timer;
+  }
+  Future doOperation(Function callback) {
+    Future.delayed(Duration(milliseconds: timer), () => callback());
     return _completer.future;
   }
 
@@ -13,8 +17,5 @@ class AsyncOperation {
 
   void errorHappened(error) {
     _completer.completeError(error);
-  }
-  bool isCompleted () {
-    return _completer.isCompleted;
   }
 }

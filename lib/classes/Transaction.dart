@@ -1,39 +1,41 @@
 import 'dart:async';
 
-import 'package:isolate_rpc/utils/AsyncOperation.dart';
+class TxTimeout {
+  Duration duration;
+  void Function(Transaction) callback;
 
-abstract class AbTransaction {
-  int? _transactionId;
+  TxTimeout(this.duration, this.callback);
 }
 
-abstract class TransactionType {
-  int? id;
-  var timeoutHandle;
-  void resolve(result);
-  void reject(error);
-}
+class Transaction {
+  late final Completer _completer;
+  late final int _id;
+  late final Timer _timer;
 
- class Transaction extends AbTransaction{
-   AsyncOperation? _asyncOperation;
-  int? _transactionId;
-  Timer? timeoutHandle;
-  Transaction(int? transactionId, AsyncOperation? asyncOperation) {
-    this._asyncOperation = asyncOperation;
-    _transactionId = transactionId;
+  Transaction(this._id, TxTimeout timeoutOpts) {
+    _completer = new Completer();
+    _timer = Timer(timeoutOpts.duration, () => timeoutOpts.callback(this));
   }
 
-  void resolve(int payload) {
+  void resolve(dynamic payload) {
+    _timer.cancel();
+    _completer.complete(payload);
+  }
 
-    _asyncOperation!.finishOperation(payload);
-   // return _resolve!();
+  void reject(error) {
+    _timer.cancel();
+    _completer.completeError(error);
   }
-   void reject(error) {
-     _asyncOperation!.errorHappened(error);
-  }
+
   dynamic getTransactionId() {
-    return _transactionId;
+    return _id;
   }
-  bool isCompleted () {
-    return _asyncOperation!.isCompleted();
+
+  bool get isCompleted {
+    return _completer.isCompleted;
+  }
+
+  Future<dynamic> get future {
+    return _completer.future;
   }
 }

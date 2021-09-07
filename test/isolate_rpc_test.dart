@@ -4,10 +4,12 @@ import 'package:isolate_rpc/classes/Message.dart';
 import 'package:isolate_rpc/classes/ValueEventArgs.dart';
 
 import 'package:isolate_rpc/isolate_rpc.dart';
-import 'package:isolate_rpc/utils/AsyncOperationWithTimer.dart';
+import 'package:isolate_rpc/utils/TestCompleter.dart';
 import 'package:isolate_rpc/utils/compareArrays.dart';
 typedef T SignalHandler<T>(T payload);
 typedef Future<U> RpcHandler<T, U> (T payload);
+
+const int testTimeout = 50;
 
 void main() {
   group('RPC Provider', () {
@@ -23,16 +25,15 @@ void main() {
       local = new RpcProvider((MessageClass message, List<dynamic>? transfer) {
          transferLocalToRemote = transfer;
          remote?.dispatch(message);
-        }, 50);
+        }, timeoutMs: testTimeout);
 
-      // local?.error.subscribe((args) {print('local_event_fired');});
       RpcProvider.error.subscribe((args) {
         errorLocal = (args as ValueEventArgs).get();
       });
       remote = new RpcProvider((MessageClass message, List<dynamic>? transfer)  {
         transferRemoteToLocal = transfer;
         local?.dispatch(message);
-        }, 50);
+        }, timeoutMs: testTimeout);
 
       RpcProvider.error.subscribe((args) {
         errorRemote = (args as ValueEventArgs).get();
@@ -84,7 +85,7 @@ void main() {
       });
 
       test('Handlers can be deregistered', () {
-        int x = -1;
+        String x = 'negative one';
         SignalHandler handler = (value) => x = value;
         remote?.registerSignalHandler('action', handler);
         remote?.unregisterSignalHandler('action', handler);
@@ -92,7 +93,7 @@ void main() {
 
         assert(errorLocal == null);
         assert(errorRemote == null);
-        assert(x==-1);
+        assert(x=='negative one');
       });
 
       test('Transfer is honored', () {
@@ -112,15 +113,15 @@ void main() {
 
     group('RPC', () {
       test('RPC handlers can return values', () async {
-        remote?.registerRpcHandler('action', (x) => 10);
-        int result = await local?.rpc('action');
-        assert(result==10);
+        remote?.registerRpcHandler('action', (x) => 'ten');
+        String result = await local?.rpc('action');
+        assert(result=='ten');
         assert(errorLocal == null);
         assert(errorRemote == null);
       });
 
       test('RPC handlers can return futures', () async {
-        AsyncOperationWithTimer timer = new AsyncOperationWithTimer(timer: 15);
+        TestCompleter timer = new TestCompleter(timer: 15);
         remote?.registerRpcHandler('action', (x) {
           return timer.doOperation(()=> timer.finishOperation(10));
         });
@@ -132,7 +133,7 @@ void main() {
 
       // TODO: check terminology (originally "promise rejection")
       test('Future rejection is transferred', () async {
-        AsyncOperationWithTimer timer = new AsyncOperationWithTimer(timer: 15);
+        TestCompleter timer = new TestCompleter(timer: 15);
         remote?.registerRpcHandler('action', (x) {
           return timer.doOperation(()=> timer.errorHappened(10));
         });
@@ -170,8 +171,8 @@ void main() {
       });
 
       test('RPC calls time out', ()async {
-        AsyncOperationWithTimer firstTimer = new AsyncOperationWithTimer(timer: 100);
-        AsyncOperationWithTimer secondTimer = new AsyncOperationWithTimer(timer: 100);
+        TestCompleter firstTimer = new TestCompleter(timer: 100);
+        TestCompleter secondTimer = new TestCompleter(timer: 100);
 
         remote?.registerRpcHandler('action', (x) {
           return firstTimer.doOperation(()=> firstTimer.finishOperation(10));
@@ -189,16 +190,16 @@ void main() {
       });
 
       test('Multiple RPC handlers do not interfere', ()async {
-        AsyncOperationWithTimer timer = new AsyncOperationWithTimer(timer: 30);
+        TestCompleter timer = new TestCompleter(timer: 30);
         remote?.registerRpcHandler('a1', (value) {
           return timer.doOperation(()=> timer.finishOperation(value));
         });
         remote?.registerRpcHandler('a2', (value) => 2 * 20);
 
-        int a1 = await local?.rpc('a1',10);
+        String a1 = await local?.rpc('a1', 'ten');
         int a2 = await local?.rpc('a2',20);
 
-        assert(a1 == 10);
+        assert(a1 == 'ten');
         assert(a2 == 40);
         assert(errorLocal == null);
         assert(errorRemote == null);
