@@ -1,1 +1,2 @@
-A simple command-line application.
+
+`isolate_rpc` is a dart port of [worker-rpc](https://github.com/DirtyHairy/worker-rpc) which implements remote procedure calls and events /signals on top of the dart isolate message-passing interface (see: [`ReceivePort`](https://api.dart.dev/stable/2.14.4/dart-isolate/ReceivePort-class.html) and [`SendPort`](https://api.dart.dev/stable/2.14.4/dart-isolate/SendPort-class.html)).
